@@ -1,4 +1,4 @@
-﻿/**
+/**
  * HTTP API 服务
  * 提供 ChatLab 标准化格式的消息查询 API
  */
@@ -2219,7 +2219,7 @@ class HttpService {
       chatlab: {
         version: '0.0.2',
         exportedAt: Math.floor(Date.now() / 1000),
-        generator: 'WeFlow'
+        generator: 'TalkGate'
       },
       meta: {
         name: talkerName,
@@ -2700,3 +2700,4 @@ class HttpService {
 }
 
 export const httpService = new HttpService()
+

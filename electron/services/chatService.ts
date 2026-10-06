@@ -452,6 +452,7 @@ class ChatService {
   private readonly contactLabelNameMapCacheTtlMs = 10 * 60 * 1000
   private connectInFlight: Promise<{ success: boolean; error?: string }> | null = null
   private contactsLoadInFlight: { mode: 'lite' | 'full'; promise: Promise<{ success: boolean; contacts?: ContactInfo[]; error?: string }> } | null = null
+  private sessionsLoadInFlight: Promise<{ success: boolean; sessions?: ChatSession[]; error?: string }> | null = null
   private contactsMemoryCache = new Map<'lite' | 'full', { scope: string; updatedAt: number; contacts: ContactInfo[] }>()
   private readonly contactsMemoryCacheTtlMs = 3 * 60 * 1000
   private readonly contactDisplayNameCollator = new Intl.Collator('zh-CN')
@@ -856,6 +857,17 @@ class ChatService {
    * 获取会话列表（优化：先返回基础数据，不等待联系人信息加载）
    */
   async getSessions(): Promise<{ success: boolean; sessions?: ChatSession[]; error?: string }> {
+    if (this.sessionsLoadInFlight) return await this.sessionsLoadInFlight
+    const promise = this.getSessionsInternal()
+    this.sessionsLoadInFlight = promise
+    try {
+      return await promise
+    } finally {
+      if (this.sessionsLoadInFlight === promise) this.sessionsLoadInFlight = null
+    }
+  }
+
+  private async getSessionsInternal(): Promise<{ success: boolean; sessions?: ChatSession[]; error?: string }> {
     try {
       const connectResult = await this.ensureConnected()
       if (!connectResult.success) {
@@ -1086,7 +1098,10 @@ class ChatService {
       for (const row of contactResult.contacts as Record<string, any>[]) {
         const username = String(row.username || '').trim()
         if (!username || !this.isAntiRevokeContactRow(username, row)) continue
-        const displayName = String(row.remark || row.nick_name || row.nickName || row.alias || username)
+        const displayName = String(this.getRowField(row, [
+          'remark', 'Remark', 'nick_name', 'nickName', 'nickname', 'NickName',
+          'alias', 'Alias', 'display_name', 'displayName', 'group_name', 'chatroom_name'
+        ]) || username)
         map.set(username, {
           displayName: displayName.trim() || displayName
         })
@@ -1240,7 +1255,10 @@ class ChatService {
           sortTimestamp: 0,
           lastTimestamp: 0,
           lastMsgType: 0,
-          displayName: row.remark || row.nick_name || row.alias || username,
+          displayName: this.getRowField(row, [
+            'remark', 'Remark', 'nick_name', 'nickName', 'nickname', 'NickName',
+            'alias', 'Alias', 'display_name', 'displayName', 'group_name', 'chatroom_name'
+          ]) || username,
           avatarUrl: undefined,
           selfWxid: myWxid
         })
@@ -2159,7 +2177,8 @@ class ChatService {
       // 获取会话表的最后联系时间用于排序
       const sessionsStartedAt = Date.now()
       const lastContactTimeMap = new Map<string, number>()
-      const sessionResult = await wcdbService.getSessions()
+      // 关系档案页面会同时请求会话和联系人；复用进行中的会话读取，避免重复扫 session.db。
+      const sessionResult = await this.getSessions()
       captureStage('getSessions', sessionsStartedAt)
       if (sessionResult.success && sessionResult.sessions) {
         for (const session of sessionResult.sessions as any[]) {
@@ -2221,7 +2240,10 @@ class ChatService {
           continue
         }
 
-        const displayName = row.remark || row.nick_name || row.alias || username
+        const displayName = this.getRowField(row, [
+          'remark', 'Remark', 'nick_name', 'nickName', 'nickname', 'NickName',
+          'alias', 'Alias', 'display_name', 'displayName', 'group_name', 'chatroom_name'
+        ]) || username
         const labels = isLiteMode ? [] : this.parseContactLabels(row, contactLabelNameMap)
         const description = isLiteMode ? '' : this.getContactDescription(row)
         const detailDescription = isLiteMode ? '' : this.getContactSignature(row)
@@ -2231,9 +2253,9 @@ class ChatService {
         contacts.push({
           username,
           displayName,
-          remark: row.remark || undefined,
-          nickname: row.nick_name || undefined,
-          alias: row.alias || undefined,
+          remark: this.getRowField(row, ['remark', 'Remark']) || undefined,
+          nickname: this.getRowField(row, ['nick_name', 'nickName', 'nickname', 'NickName']) || undefined,
+          alias: this.getRowField(row, ['alias', 'Alias']) || undefined,
           labels: labels.length > 0 ? labels : undefined,
           description: description || undefined,
           detailDescription: detailDescription || undefined,
@@ -5460,15 +5482,20 @@ class ChatService {
       const serverId = this.getRowInt(row, ['server_id'], 0)
       const content = this.decodeMessageContent(row.message_content, row.compress_content)
 
-      const isSendRaw = row.computed_is_send ?? row.is_send
+      const isSendRaw = row._weflow_is_send ?? row.computed_is_send ?? row.is_send ?? row.isSend ?? row.IsSend ?? row.WCDB_CT_is_send ?? row.WCDB_CT_IsSend
       const parsedRawIsSend = isSendRaw === null || isSendRaw === undefined
         ? null
         : parseInt(String(isSendRaw), 10)
       const normalizedIsSend = typeof parsedRawIsSend === 'number' && Number.isFinite(parsedRawIsSend)
         ? parsedRawIsSend
         : null
-      const senderFromRow = String(row.sender_username || '').trim() || this.extractSenderUsernameFromContent(content) || null
-      const { isSend } = this.resolveMessageIsSend(normalizedIsSend, senderFromRow)
+      const senderFromRow = String(
+        this.getRowField(row, ['_weflow_sender_username', 'computed_sender_username', 'sender_username', 'senderUsername', 'real_sender_id', 'realSenderId', 'sender_id', 'senderId']) || ''
+      ).trim() || this.extractSenderUsernameFromContent(content) || null
+      const selfKeys = new Set(this.buildIdentityKeys(myWxid))
+      const selfMatched = this.buildIdentityKeys(senderFromRow || '').some((key) => selfKeys.has(key))
+      const { isSend: resolvedIsSend } = this.resolveMessageIsSend(normalizedIsSend, senderFromRow)
+      const isSend = selfMatched ? 1 : resolvedIsSend
       const senderUsername = senderFromRow || (isSend === 1 && myWxid ? myWxid : null)
 
       messages.push({
@@ -5509,12 +5536,16 @@ class ChatService {
 
       const content = this.decodeMessageContent(rawMessageContent, rawCompressContent);
       const localType = this.getRowInt(row, ['local_type'], 1)
-      const isSendRaw = row.computed_is_send ?? row.is_send
-      const parsedRawIsSend = isSendRaw === null ? null : parseInt(isSendRaw, 10)
-      const senderUsername = row.sender_username
+      const isSendRaw = row._weflow_is_send ?? row.computed_is_send ?? row.is_send ?? row.isSend ?? row.IsSend ?? row.WCDB_CT_is_send ?? row.WCDB_CT_IsSend
+      const parsedRawIsSend = isSendRaw === null || isSendRaw === undefined || isSendRaw === '' ? null : parseInt(String(isSendRaw), 10)
+      const senderUsername = this.getRowField(row, ['_weflow_sender_username', 'computed_sender_username', 'sender_username', 'senderUsername', 'real_sender_id', 'realSenderId', 'sender_id', 'senderId'])
         || this.extractSenderUsernameFromContent(content)
         || null
-      const { isSend } = this.resolveMessageIsSend(parsedRawIsSend, senderUsername)
+      const senderText = String(senderUsername || '').trim()
+      const selfKeys = new Set(this.buildIdentityKeys(String(myWxid || '')))
+      const selfMatched = this.buildIdentityKeys(senderText).some((key) => selfKeys.has(key))
+      const { isSend: resolvedIsSend } = this.resolveMessageIsSend(parsedRawIsSend, senderText)
+      const isSend = selfMatched ? 1 : resolvedIsSend
       const createTime = this.getRowTimestampSeconds(row, ['create_time', 'createTime', 'msg_time', 'msgTime', 'time'], 0)
 
       if (senderUsername && !myWxid) {
@@ -8352,9 +8383,9 @@ class ChatService {
       ])
 
       if (contactResult.status === 'fulfilled' && contactResult.value.success && contactResult.value.contact) {
-        remark = contactResult.value.contact.remark || undefined
-        nickName = contactResult.value.contact.nickName || undefined
-        alias = contactResult.value.contact.alias || undefined
+        remark = this.getRowField(contactResult.value.contact, ['remark', 'Remark']) || undefined
+        nickName = this.getRowField(contactResult.value.contact, ['nick_name', 'nickName', 'nickname', 'NickName']) || undefined
+        alias = this.getRowField(contactResult.value.contact, ['alias', 'Alias']) || undefined
         displayName = remark || nickName || alias || displayName
       }
 
@@ -12857,3 +12888,5 @@ class ChatService {
 }
 
 export const chatService = new ChatService()
+
+

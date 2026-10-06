@@ -1,4 +1,4 @@
-﻿import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow } from 'electron'
 import { basename, dirname, extname, join } from 'path'
 import { fileURLToPath, pathToFileURL } from 'url'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'fs'
@@ -2732,3 +2732,4 @@ export class ImageDecryptService {
 }
 
 export const imageDecryptService = new ImageDecryptService()
+

@@ -403,8 +403,8 @@ jobs:
 
           ## macOS 安装提示
           - 如果被系统提示已损坏，你需要在终端执行以下命令去除隔离标记：
-          - \`xattr -dr com.apple.quarantine "/Applications/WeFlow.app"\`
-          - 执行后重新打开 WeFlow。
+          - \`xattr -dr com.apple.quarantine "/Applications/TalkGate.app"\`
+          - 执行后重新打开 TalkGate。
 
           > 如某个平台链接暂未生成，请前往[发布页]($RELEASE_PAGE)查看最新资源
           EOF
@@ -430,3 +430,5 @@ jobs:
           RELEASE_REST_ID="$(wait_for_release_id "$REPO" "$TAG" 12 2)"
           settle_release_state "$REPO" "$RELEASE_REST_ID" "$TAG" 12 2
           print_release_state "$REPO" "$TAG"
+
+

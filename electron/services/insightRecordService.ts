@@ -4,8 +4,8 @@ import path from 'path'
 import { createHash, randomUUID } from 'crypto'
 import { ConfigService } from './config'
 
-export type InsightRecordTriggerReason = 'activity' | 'silence' | 'test' | 'manual' | 'message_analysis'
-export type InsightRecordSourceType = 'insight' | 'message_analysis'
+export type InsightRecordTriggerReason = 'activity' | 'silence' | 'test' | 'manual' | 'message_analysis' | 'relationship_analysis'
+export type InsightRecordSourceType = 'insight' | 'message_analysis' | 'relationship_analysis'
 
 export interface MessageInsightAnalysis {
   explicitText: string
@@ -21,6 +21,29 @@ export interface MessageInsightTarget {
   targetSenderName: string
   targetTextPreview: string
   analysis: MessageInsightAnalysis
+}
+
+export interface RelationshipEvidence {
+  id: string
+  messageKey?: string
+  localId: number
+  createTime: number
+  sender: string
+  quote: string
+  reason?: string
+}
+
+export interface RelationshipAnalysis {
+  accountScope?: string
+  sessionId?: string
+  emotion: string
+  facts: string[]
+  hypotheses: string[]
+  unknowns: string[]
+  recommendation: string
+  nextAction: string
+  stopCondition?: string
+  evidence: RelationshipEvidence[]
 }
 
 export interface InsightRecordLog {
@@ -54,6 +77,7 @@ export interface InsightRecordLog {
     readError?: string
   }
   parsedAnalysis?: MessageInsightAnalysis
+  parsedRelationshipAnalysis?: RelationshipAnalysis
 }
 
 export interface InsightRecord {
@@ -68,6 +92,7 @@ export interface InsightRecord {
   insight: string
   read: boolean
   messageInsight?: MessageInsightTarget
+  relationshipAnalysis?: RelationshipAnalysis
   log: InsightRecordLog
 }
 
@@ -82,6 +107,7 @@ export interface InsightRecordSummary {
   insight: string
   read: boolean
   messageInsight?: MessageInsightTarget
+  relationshipAnalysis?: RelationshipAnalysis
 }
 
 export interface InsightRecordContactFacet {
@@ -183,7 +209,8 @@ class InsightRecordService {
       triggerReason: record.triggerReason,
       insight: record.insight,
       read: record.read,
-      messageInsight: record.messageInsight
+      messageInsight: record.messageInsight,
+      relationshipAnalysis: record.relationshipAnalysis
     }
   }
 
@@ -201,6 +228,7 @@ class InsightRecordService {
     triggerReason: InsightRecordTriggerReason
     insight: string
     messageInsight?: MessageInsightTarget
+    relationshipAnalysis?: RelationshipAnalysis
     log: InsightRecordLog
   }): InsightRecord {
     this.ensureLoaded()
@@ -218,6 +246,7 @@ class InsightRecordService {
       insight: input.insight,
       read: false,
       messageInsight: input.messageInsight,
+      relationshipAnalysis: input.relationshipAnalysis,
       log: input.log
     }
 
@@ -275,7 +304,15 @@ class InsightRecordService {
               record.messageInsight?.analysis?.explicitText,
               record.messageInsight?.analysis?.emotion,
               record.messageInsight?.analysis?.intent,
-              record.messageInsight?.analysis?.topic
+              record.messageInsight?.analysis?.topic,
+              record.relationshipAnalysis?.emotion,
+              ...(record.relationshipAnalysis?.facts || []),
+              ...(record.relationshipAnalysis?.hypotheses || []),
+              ...(record.relationshipAnalysis?.unknowns || []),
+              record.relationshipAnalysis?.recommendation,
+              record.relationshipAnalysis?.nextAction,
+              record.relationshipAnalysis?.stopCondition,
+              ...(record.relationshipAnalysis?.evidence || []).map((item) => item.quote)
             ].join('\n').toLowerCase()
             if (!haystack.includes(keyword)) return false
           }

@@ -10,7 +10,7 @@ export interface SessionMessageCacheEntry {
 }
 
 export class MessageCacheService {
-  private static readonly CACHE_VERSION = 3
+  private static readonly CACHE_VERSION = 4
   private readonly cacheFilePath: string
   private cache: Record<string, SessionMessageCacheEntry> = {}
   // 每会话 80 条已覆盖首屏渲染（DB 拉取会随后补全），48→24 个会话、150→80 条

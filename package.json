@@ -1,7 +1,7 @@
 {
-  "name": "weflow",
+  "name": "talkgate",
   "version": "5.0.0",
-  "description": "WeFlow",
+  "description": "TalkGate（语扉）",
   "main": "dist-electron/main.js",
   "author": {
     "name": "cc",
@@ -9,7 +9,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/hicccc77/WeFlow"
+    "url": "https://github.com/YLiQing/WeFlow"
   },
   "//": "二改不应改变此处的作者与应用信息",
   "scripts": {
@@ -17,6 +17,7 @@
     "rebuild": "electron-rebuild",
     "dev": "node scripts/prepare-electron-runtime.cjs && vite",
     "typecheck": "tsc --noEmit",
+    "test:relationship": "node --test --experimental-strip-types electron/services/relationshipProfileCore.test.ts electron/services/relationshipAnalysisCore.test.ts electron/services/replyAssistantCore.test.ts electron/services/relationshipProfileService.test.cjs electron/services/relationshipInsight.integration.test.cjs electron/services/relationshipProfilePage.integration.test.cjs electron/services/replyAssistantPanel.integration.test.cjs",
     "build": "node scripts/clean-dist-electron.cjs && tsc && vite build && electron-builder",
     "preview": "vite preview",
     "electron:dev": "node scripts/prepare-electron-runtime.cjs && vite --mode electron",
@@ -76,14 +77,14 @@
     }
   },
   "build": {
-    "appId": "com.WeFlow.app",
+    "appId": "com.talkgate.app",
     "publish": {
       "provider": "github",
-      "owner": "hicccc77",
+      "owner": "YLiQing",
       "repo": "WeFlow",
       "releaseType": "release"
     },
-    "productName": "WeFlow",
+    "productName": "TalkGate",
     "artifactName": "${productName}-${version}-Setup.${ext}",
     "directories": {
       "output": "release"
@@ -178,8 +179,8 @@
         "tar.gz"
       ],
       "category": "Utility",
-      "executableName": "weflow",
-      "synopsis": "WeFlow for Linux",
+      "executableName": "talkgate",
+      "synopsis": "TalkGate for Linux",
       "extraFiles": [
         {
           "from": "resources/installer/linux/install.sh",
@@ -288,3 +289,6 @@
     "immutable": "^5.1.5"
   }
 }
+
+
+

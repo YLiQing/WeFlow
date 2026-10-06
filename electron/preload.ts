@@ -658,7 +658,58 @@ contextBridge.exposeInMainWorld('electronAPI', {
       targetSenderName?: string
       contextCount?: number
       forceRefresh?: boolean
-    }) => ipcRenderer.invoke('insight:generateMessageInsight', payload)
+    }) => ipcRenderer.invoke('insight:generateMessageInsight', payload),
+    analyzeRelationship: (payload: {
+      sessionId: string
+      displayName?: string
+      avatarUrl?: string
+      contextCount?: number
+    }) => ipcRenderer.invoke('insight:analyzeRelationship', payload),
+    generateRelationshipProfileDraft: (payload: { accountScope: string; sessionId: string; displayName?: string; contextCount?: number; taskId?: string; forceFull?: boolean }) => ipcRenderer.invoke('insight:generateRelationshipProfileDraft', payload),
+    onRelationshipProfileProgress: (callback: (payload: { sessionId: string; taskId: string; phase: string; progress: number; message: string; loadedMessages?: number }) => void) => {
+      const listener = (_: unknown, payload: { sessionId: string; taskId: string; phase: string; progress: number; message: string; loadedMessages?: number }) => callback(payload)
+      ipcRenderer.on('insight:relationshipProfileProgress', listener)
+      return () => ipcRenderer.removeListener('insight:relationshipProfileProgress', listener)
+    },
+    cancelRelationshipProfileDraft: (taskId: string) => ipcRenderer.invoke('insight:cancelRelationshipProfileDraft', taskId),
+    generateReplyAssistant: (payload: {
+      accountScope?: string
+      taskId?: string
+      sessionId: string
+      displayName?: string
+      mode?: string
+      contextCount?: number
+      intent?: string
+      clarification?: { question: string; answer: string }
+      revision?: { previousDraft: string; feedback: string }
+    }) => ipcRenderer.invoke('insight:generateReplyAssistant', payload),
+    cancelReplyAssistant: (taskId: string) => ipcRenderer.invoke('insight:cancelReplyAssistant', taskId),
+    validateReplyAssistant: (payload: { accountScope: string; sessionId: string; suggestionId: string }) => ipcRenderer.invoke('insight:validateReplyAssistant', payload)
+  },
+
+  relationshipProfile: {
+    getMemoryHistory: (sessionId: string, accountScope: string) => ipcRenderer.invoke('relationshipProfile:getMemoryHistory', sessionId, accountScope),
+    restoreMemory: (payload: { accountScope: string; sessionId: string; revision: string; kind: 'version' | 'archive'; id: string }) => ipcRenderer.invoke('relationshipProfile:restoreMemory', payload),
+    getAnalysisHistory: (sessionId: string) => ipcRenderer.invoke('relationshipProfile:getAnalysisHistory', sessionId),
+    reviewHypothesis: (payload: { accountScope: string; sessionId: string; value: string; status: 'active' | 'confirmed' | 'refuted' | 'expired'; expiresAt?: number }) => ipcRenderer.invoke('relationshipProfile:reviewHypothesis', payload),
+    refreshDraftUpdates: () => ipcRenderer.invoke('relationshipProfile:refreshDraftUpdates'),
+    getPendingReview: (sessionId: string) => ipcRenderer.invoke('relationshipProfile:getPendingReview', sessionId),
+    savePendingReview: (payload: unknown) => ipcRenderer.invoke('relationshipProfile:savePendingReview', payload),
+    discardPendingReview: (sessionId: string, accountScope: string) => ipcRenderer.invoke('relationshipProfile:discardPendingReview', sessionId, accountScope),
+    getState: () => ipcRenderer.invoke('relationshipProfile:getState'),
+    enableMemory: (accountScope: string) => ipcRenderer.invoke('relationshipProfile:enableMemory', accountScope),
+    setPaused: (paused: boolean, accountScope: string) => ipcRenderer.invoke('relationshipProfile:setPaused', paused, accountScope),
+    update: (payload: { accountScope: string; sessionId?: string; user?: Record<string, unknown>; object?: Record<string, unknown>; relationship?: Record<string, unknown> }) => ipcRenderer.invoke('relationshipProfile:update', payload),
+    addEvent: (payload: { accountScope: string; sessionId: string; id: string; summary: string; occurredAt: string; source?: 'user' | 'model' | 'chat'; evidenceIds?: string[] }) => ipcRenderer.invoke('relationshipProfile:addEvent', payload),
+    confirmFact: (sessionId: string, fact: string, accountScope: string) => ipcRenderer.invoke('relationshipProfile:confirmFact', sessionId, fact, accountScope),
+    removeFact: (sessionId: string, fact: string, accountScope: string) => ipcRenderer.invoke('relationshipProfile:removeFact', sessionId, fact, accountScope),
+    confirmHypothesis: (payload: { accountScope: string; sessionId: string; value: string; confidence?: 'low' | 'medium' | 'high'; evidenceIds?: string[] }) => ipcRenderer.invoke('relationshipProfile:confirmHypothesis', payload),
+    recordReplyOutcome: (payload: { sessionId: string; accountScope: string; id?: string; suggestionId?: string; mode?: string; draft: string; outcome: string; originalDraft?: string; intent?: string; revisionFeedback?: string }) => ipcRenderer.invoke('relationshipProfile:recordReplyOutcome', payload),
+    confirmReplyPreference: (payload: { accountScope: string; sessionId: string; value: string; suggestionId: string; feedback: string; replyMode?: string; expressionExample?: { previous: string; approved: string } }) => ipcRenderer.invoke('relationshipProfile:confirmReplyPreference', payload),
+    removeHypothesis: (sessionId: string, value: string, accountScope: string) => ipcRenderer.invoke('relationshipProfile:removeHypothesis', sessionId, value, accountScope),
+    forgetObject: (sessionId: string, accountScope: string) => ipcRenderer.invoke('relationshipProfile:forgetObject', sessionId, accountScope),
+    revoke: (deleteData: boolean, accountScope: string) => ipcRenderer.invoke('relationshipProfile:revoke', deleteData, accountScope)
+    , applyDraft: (payload: { sessionId: string; draft: unknown; approvals: unknown; decisions?: Record<string, string> }) => ipcRenderer.invoke('relationshipProfile:applyDraft', payload)
   },
 
   groupSummary: {

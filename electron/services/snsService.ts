@@ -1845,7 +1845,7 @@ class SnsService {
         if (filters.keyword) lines.push(`- 筛选关键词: ${escapeMarkdownText(filters.keyword)}`)
         if (filters.usernames && filters.usernames.length > 0) lines.push(`- 筛选用户: ${filters.usernames.length} 人`)
         lines.push(`- 导出时间: ${new Date().toLocaleString('zh-CN')}`)
-        lines.push('- 导出工具: WeFlow')
+        lines.push('- 导出工具: TalkGate')
 
         for (const post of posts) {
             lines.push('')
@@ -2079,7 +2079,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
 <div class="container">
     <div class="feed-hd"><h2>朋友圈</h2><span class="info">共 ${posts.length} 条${filterInfo ? ` · ${filterInfo}` : ''}</span></div>
     ${postsHtml}
-    <div class="ft">由 WeFlow 导出 · ${new Date().toLocaleString('zh-CN')}</div>
+    <div class="ft">由 TalkGate 导出 · ${new Date().toLocaleString('zh-CN')}</div>
 </div>
 <div class="lb" id="lb" onclick="closeLb()"><img id="lbi" src=""></div>
 <button class="btt" id="btt" onclick="scrollTo({top:0,behavior:'smooth'})">↑</button>
@@ -2649,3 +2649,6 @@ window.addEventListener('scroll',function(){document.getElementById('btt').class
 }
 
 export const snsService = new SnsService()
+
+
+

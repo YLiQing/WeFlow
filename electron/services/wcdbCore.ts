@@ -382,6 +382,7 @@ export class WcdbCore {
 
   private formatInitProtectionError(code: number): string {
     const messages: Record<number, string> = {
+      '-101': 'WCDB 数据服务组件已过期（旧版 DLL 内置有效期已结束），需要替换为新的授权构建或重新编译兼容 DLL',
       '-3001': '未找到数据库目录 (db_storage)，请确认已选择正确的微信数据目录（应包含以 wxid_ 开头的子文件夹）',
       '-3002': '未找到 session.db 文件，请确认微信已登录并且数据目录完整',
       '-3003': '数据库句柄无效，请重试',
@@ -2048,6 +2049,7 @@ export class WcdbCore {
       const jsonStr = this.decodeJsonPtr(outPtr[0])
       if (!jsonStr) return { success: false, error: '解析消息失败' }
       const messages = this.parseMessageJson(jsonStr)
+      this.writeLog(`getMessages session=${sessionId} rows=${Array.isArray(messages) ? messages.length : 0} selfFlags=${Array.isArray(messages) ? messages.filter((row: any) => Number(row?._weflow_is_send ?? row?.computed_is_send ?? row?.is_send ?? row?.isSend) === 1).length : 0}`)
       return { success: true, messages }
     } catch (e) {
       return { success: false, error: String(e) }
@@ -2904,8 +2906,12 @@ export class WcdbCore {
           serverId: pickString(row, ['server_id', 'serverId']) || undefined,
           createTime: toInt(row.create_time ?? row.createTime),
           localType,
-          senderUsername: pickString(row, ['sender_username', 'senderUsername', 'real_sender_id', 'realSenderId']) || undefined,
-          isSend: row.is_send === null || row.is_send === undefined ? null : toInt(row.is_send),
+          senderUsername: pickString(row, ['computed_sender_username', 'sender_username', 'senderUsername', 'real_sender_id', 'realSenderId', 'sender_id', 'senderId']) || undefined,
+          isSend: row.computed_is_send === null || row.computed_is_send === undefined
+            ? (row.is_send === null || row.is_send === undefined
+              ? (row.isSend === null || row.isSend === undefined ? null : toInt(row.isSend))
+              : toInt(row.is_send))
+            : toInt(row.computed_is_send),
           imageMd5,
           imageDatName,
           videoMd5,

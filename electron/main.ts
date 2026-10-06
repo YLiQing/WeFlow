@@ -38,6 +38,7 @@ import { normalizeWeiboCookieInput, weiboService } from './services/social/weibo
 import { bizService } from './services/bizService'
 import { backupService } from './services/backupService'
 import { imageDownloadService } from './services/imageDownloadService'
+import { relationshipProfileService } from './services/relationshipProfileService'
 
 // 屏幕采集去节流（仅影响通知玻璃的 Chromium 流回退管线；Windows 主路径为
 // 原生面板渲染，不经过 Chromium 采集）：默认桌面采集 CPU 预算限制在 50%，
@@ -418,7 +419,7 @@ const resetUpdaterProviderCache = () => {
 }
 
 const getUpdaterFeedUrlByTrack = (track: 'stable' | 'preview' | 'dev'): string => {
-  const repoBase = 'https://github.com/hicccc77/WeFlow/releases'
+  const repoBase = 'https://github.com/YLiQing/WeFlow/releases'
   if (track === 'stable') return `${repoBase}/latest/download`
   if (track === 'preview') return `${repoBase}/download/nightly-preview`
   return `${repoBase}/download/nightly-dev`
@@ -1997,6 +1998,7 @@ const runLegacySnsCacheMigration = async (
 
 // 注册 IPC 处理器
 function registerIpcHandlers() {
+  console.info('[WeFlow IPC] relationship profile analysis handlers ready v2')
   registerNotificationHandlers()
   ensureNotificationNavigateHandlerRegistered()
   bizService.registerHandlers()
@@ -2035,7 +2037,7 @@ function registerIpcHandlers() {
     sessionId?: string
     startTime?: number
     endTime?: number
-    sourceType?: 'insight' | 'message_analysis' | 'all'
+    sourceType?: 'insight' | 'message_analysis' | 'relationship_analysis' | 'all'
     limit?: number
     offset?: number
   }) => {
@@ -2116,6 +2118,82 @@ function registerIpcHandlers() {
   }) => {
     return insightService.generateMessageInsight(payload)
   })
+
+  ipcMain.handle('relationshipProfile:getState', async () => relationshipProfileService.getState())
+  ipcMain.handle('relationshipProfile:getMemoryHistory', async (_, sessionId: string, accountScope: string) => relationshipProfileService.getMemoryHistory(sessionId, accountScope))
+  ipcMain.handle('relationshipProfile:restoreMemory', async (_, payload: Parameters<typeof relationshipProfileService.restoreMemory>[0]) => relationshipProfileService.restoreMemory(payload))
+  ipcMain.handle('relationshipProfile:getAnalysisHistory', async (_, sessionId: string) => relationshipProfileService.getAnalysisHistory(sessionId))
+  ipcMain.handle('relationshipProfile:reviewHypothesis', async (_, payload: Parameters<typeof relationshipProfileService.reviewHypothesis>[0]) => relationshipProfileService.reviewHypothesis(payload))
+  const withRelationshipAccount = <T>(accountScope: string, action: () => T): T => {
+    relationshipProfileService.assertAccountScope(accountScope)
+    return action()
+  }
+  ipcMain.handle('relationshipProfile:refreshDraftUpdates', async () => { await insightService.refreshRelationshipDraftUpdates(); return { success: true } })
+  ipcMain.handle('relationshipProfile:getPendingReview', async (_, sessionId: string) => relationshipProfileService.getPendingReview(sessionId))
+  ipcMain.handle('relationshipProfile:savePendingReview', async (_, payload: Parameters<typeof relationshipProfileService.savePendingReview>[0]) => relationshipProfileService.savePendingReview(payload))
+  ipcMain.handle('relationshipProfile:discardPendingReview', async (_, sessionId: string, accountScope: string) => withRelationshipAccount(accountScope, () => relationshipProfileService.discardPendingReview(sessionId)))
+  ipcMain.handle('relationshipProfile:enableMemory', async (_, accountScope: string) => withRelationshipAccount(accountScope, () => relationshipProfileService.enableMemory()))
+  ipcMain.handle('relationshipProfile:setPaused', async (_, paused: boolean, accountScope: string) => withRelationshipAccount(accountScope, () => relationshipProfileService.setPaused(paused)))
+  ipcMain.handle('relationshipProfile:update', async (_, payload: {
+    accountScope: string
+    sessionId?: string
+    user?: Record<string, unknown>
+    object?: Record<string, unknown>
+    relationship?: Record<string, unknown>
+  }) => withRelationshipAccount(payload.accountScope, () => relationshipProfileService.update(payload as any)))
+  ipcMain.handle('relationshipProfile:addEvent', async (_, payload: {
+    accountScope: string
+    sessionId: string
+    id: string
+    summary: string
+    occurredAt: string
+    source?: 'user' | 'model' | 'chat'
+    evidenceIds?: string[]
+  }) => withRelationshipAccount(payload.accountScope, () => relationshipProfileService.addEvent(payload)))
+  ipcMain.handle('relationshipProfile:confirmFact', async (_, sessionId: string, fact: string, accountScope: string) => withRelationshipAccount(accountScope, () => relationshipProfileService.confirmFact(sessionId, fact)))
+  ipcMain.handle('relationshipProfile:removeFact', async (_, sessionId: string, fact: string, accountScope: string) => withRelationshipAccount(accountScope, () => relationshipProfileService.removeFact(sessionId, fact)))
+  ipcMain.handle('relationshipProfile:confirmHypothesis', async (_, payload: { accountScope: string; sessionId: string; value: string; confidence?: 'low' | 'medium' | 'high'; evidenceIds?: string[] }) => withRelationshipAccount(payload.accountScope, () => relationshipProfileService.confirmHypothesis(payload)))
+  ipcMain.handle('relationshipProfile:recordReplyOutcome', async (_, payload: Parameters<typeof relationshipProfileService.recordReplyOutcome>[0]) => withRelationshipAccount(payload.accountScope, () => relationshipProfileService.recordReplyOutcome(payload)))
+  ipcMain.handle('relationshipProfile:confirmReplyPreference', async (_, payload: Parameters<typeof relationshipProfileService.confirmReplyPreference>[0]) => relationshipProfileService.confirmReplyPreference(payload))
+  ipcMain.handle('relationshipProfile:removeHypothesis', async (_, sessionId: string, value: string, accountScope: string) => withRelationshipAccount(accountScope, () => relationshipProfileService.removeHypothesis(sessionId, value)))
+  ipcMain.handle('relationshipProfile:forgetObject', async (_, sessionId: string, accountScope: string) => withRelationshipAccount(accountScope, () => {
+    const result = relationshipProfileService.forgetObject(sessionId)
+    if (result.success) insightService.invalidateRelationshipIndex(sessionId)
+    return result
+  }))
+  ipcMain.handle('relationshipProfile:revoke', async (_, deleteData: boolean, accountScope: string) => withRelationshipAccount(accountScope, () => {
+    const result = relationshipProfileService.revoke(deleteData === true)
+    if (result.success) insightService.invalidateRelationshipIndex()
+    return result
+  }))
+  ipcMain.handle('relationshipProfile:applyDraft', async (_, payload: Parameters<typeof relationshipProfileService.applyDraft>[0]) => insightService.applyRelationshipProfileDraft(payload))
+
+  ipcMain.handle('insight:analyzeRelationship', async (_, payload: {
+    sessionId: string
+    displayName?: string
+    avatarUrl?: string
+    contextCount?: number
+  }) => {
+    return insightService.analyzeRelationship(payload)
+  })
+  ipcMain.handle('insight:generateRelationshipProfileDraft', async (event, payload: { accountScope: string; sessionId: string; displayName?: string; contextCount?: number; taskId?: string; forceFull?: boolean }) => withRelationshipAccount(payload.accountScope, () => insightService.generateRelationshipProfileDraft({
+    ...payload,
+    onProgress: (progress) => { if (!event.sender.isDestroyed()) event.sender.send('insight:relationshipProfileProgress', progress) }
+  })))
+  ipcMain.handle('insight:cancelRelationshipProfileDraft', async (_, taskId: string) => insightService.cancelRelationshipProfileDraft(taskId))
+  ipcMain.handle('insight:generateReplyAssistant', async (_, payload: {
+    accountScope?: string
+    taskId?: string
+    sessionId: string
+    displayName?: string
+    mode?: string
+    contextCount?: number
+    intent?: string
+    clarification?: { question: string; answer: string }
+    revision?: { previousDraft: string; feedback: string }
+  }) => insightService.generateReplyAssistant(payload))
+  ipcMain.handle('insight:cancelReplyAssistant', async (_, taskId: string) => insightService.cancelReplyAssistant(taskId))
+  ipcMain.handle('insight:validateReplyAssistant', async (_, payload: { accountScope: string; sessionId: string; suggestionId: string }) => insightService.validateReplyAssistant(payload))
 
   ipcMain.handle('groupSummary:listRecords', async (_, filters?: {
     sessionId?: string
@@ -2763,11 +2841,17 @@ function registerIpcHandlers() {
   })
 
   ipcMain.handle('chat:updateMessage', async (_, sessionId: string, localId: number, createTime: number, newContent: string) => {
-    return chatService.updateMessage(sessionId, localId, createTime, newContent)
+    const accountScope = relationshipProfileService.getAccountScope()
+    const result = await chatService.updateMessage(sessionId, localId, createTime, newContent)
+    if (result.success) insightService.invalidateRelationshipIndex(sessionId, accountScope)
+    return result
   })
 
   ipcMain.handle('chat:deleteMessage', async (_, sessionId: string, localId: number, createTime: number, dbPathHint?: string) => {
-    return chatService.deleteMessage(sessionId, localId, createTime, dbPathHint)
+    const accountScope = relationshipProfileService.getAccountScope()
+    const result = await chatService.deleteMessage(sessionId, localId, createTime, dbPathHint)
+    if (result.success) insightService.invalidateRelationshipIndex(sessionId, accountScope)
+    return result
   })
 
   ipcMain.handle('chat:checkAntiRevokeTriggers', async (_, sessionIds: string[]) => {
@@ -4624,7 +4708,7 @@ app.whenReady().then(async () => {
 
   try {
     tray = new Tray(resolvedTrayIcon)
-    tray.setToolTip('WeFlow')
+  tray.setToolTip('WeFlow')
     const contextMenu = Menu.buildFromTemplate([
       {
         label: '显示主窗口',
@@ -4793,3 +4877,4 @@ app.on('window-all-closed', () => {
     app.quit()
   }
 })
+

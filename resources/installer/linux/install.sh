@@ -2,8 +2,8 @@
 
 set -e
 
-APP_NAME="weflow"
-APP_EXEC="weflow"
+APP_NAME="talkgate"
+APP_EXEC="talkgate"
 OPT_DIR="/opt/$APP_NAME"
 BIN_LINK="/usr/bin/$APP_NAME"
 DESKTOP_DIR="/usr/share/applications"
@@ -29,12 +29,12 @@ ln -sf "$OPT_DIR/$APP_EXEC" "$BIN_LINK"
 echo "📝 正在创建桌面快捷方式..."
 cat <<EOF >"$DESKTOP_DIR/${APP_NAME}.desktop"
 [Desktop Entry]
-Name=WeFlow
+Name=TalkGate
 Exec=$OPT_DIR/$APP_EXEC %U
 Terminal=false
 Type=Application
 Icon=$APP_NAME
-StartupWMClass=WeFlow
+StartupWMClass=TalkGate
 Comment=A local WeChat database decryption and analysis tool
 Categories=Utility;
 EOF
@@ -56,4 +56,5 @@ if command -v update-desktop-database >/dev/null 2>&1; then
   update-desktop-database "$DESKTOP_DIR"
 fi
 
-echo "✅ 安装完成！你现在可以在应用菜单中找到 WeFlow，或者在终端输入 'weflow' 启动。"
+echo "✅ 安装完成！你现在可以在应用菜单中找到 TalkGate（语扉），或者在终端输入 'talkgate' 启动。"
+

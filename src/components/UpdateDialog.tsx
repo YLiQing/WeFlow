@@ -88,7 +88,7 @@ const UpdateDialog: React.FC<UpdateDialogProps> = ({
                     <div className="version-tag">
                         新版本 {updateInfo.version}
                     </div>
-                    <h2>欢迎体验全新的 WeFlow</h2>
+                    <h2>欢迎体验全新的 TalkGate（语扉）</h2>
                     <div className="subtitle">我们带来了一些改进</div>
                 </div>
 
@@ -149,3 +149,4 @@ const UpdateDialog: React.FC<UpdateDialogProps> = ({
 }
 
 export default UpdateDialog
+

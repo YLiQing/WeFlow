@@ -1,4 +1,4 @@
-﻿import { app } from 'electron'
+import { app } from 'electron'
 import { existsSync, mkdirSync, statSync, unlinkSync, createWriteStream, openSync, writeSync, closeSync } from 'fs'
 import { join } from 'path'
 import * as https from 'https'
@@ -614,3 +614,4 @@ export class VoiceTranscribeService {
 }
 
 export const voiceTranscribeService = new VoiceTranscribeService()
+

@@ -222,7 +222,7 @@ export class MarkdownFormatter {
       await writeChunk(`- 会话类型: ${isGroup ? '群聊' : '私聊'}\n`)
       await writeChunk(`- 消息数量: ${totalMessages}\n`)
       await writeChunk(`- 导出时间: ${escapeMarkdownText(formatTimestamp(exportMeta.chatlab.exportedAt))}\n`)
-      await writeChunk(`- 导出工具: WeFlow\n\n---\n\n`)
+      await writeChunk(`- 导出工具: TalkGate\n\n---\n\n`)
 
       const WRITE_BATCH = 80
       let writeBuffer: string[] = []
@@ -437,3 +437,4 @@ export class MarkdownFormatter {
     }
   }
 }
+

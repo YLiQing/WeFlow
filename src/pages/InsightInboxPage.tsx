@@ -65,6 +65,7 @@ function formatGroupDate(timestamp: number): string {
 
 function getTriggerLabel(reason: InsightRecordTriggerReason): string {
   if (reason === 'message_analysis') return '深度解析'
+  if (reason === 'relationship_analysis') return '关系分析'
   if (reason === 'silence') return '沉默提醒'
   if (reason === 'test') return '测试见解'
   if (reason === 'manual') return '手动触发'
@@ -72,7 +73,9 @@ function getTriggerLabel(reason: InsightRecordTriggerReason): string {
 }
 
 function getSourceLabel(sourceType?: InsightRecordSourceType): string {
-  return sourceType === 'message_analysis' ? '深度解析' : 'AI 见解'
+  if (sourceType === 'message_analysis') return '深度解析'
+  if (sourceType === 'relationship_analysis') return '关系分析'
+  return 'AI 见解'
 }
 
 function buildLogText(record: InsightRecord): string {
@@ -112,6 +115,19 @@ function buildLogText(record: InsightRecord): string {
     lines.splice(4, 0,
       `目标消息：${record.messageInsight?.targetSenderName || log.targetMessage?.senderName || ''}：${record.messageInsight?.targetTextPreview || log.targetMessage?.textPreview || ''}`,
       `目标定位：localId=${record.messageInsight?.targetLocalId || log.targetMessage?.localId || 0}, createTime=${record.messageInsight?.targetCreateTime || log.targetMessage?.createTime || 0}, key=${record.messageInsight?.targetMessageKey || log.targetMessage?.messageKey || ''}`
+    )
+  }
+
+  if (record.sourceType === 'relationship_analysis' && record.relationshipAnalysis) {
+    const analysis = record.relationshipAnalysis
+    lines.splice(8, 0,
+      `情绪承接：${analysis.emotion}`,
+      `可观察事实：${analysis.facts.join('；')}`,
+      `合理推测：${analysis.hypotheses.join('；')}`,
+      `关键未知：${analysis.unknowns.join('；')}`,
+      `下一步：${analysis.nextAction}`,
+      `停止条件：${analysis.stopCondition || '未提供'}`,
+      `证据：${analysis.evidence.map((item) => `[${item.id}] ${item.quote}`).join('；')}`
     )
   }
 
@@ -364,6 +380,14 @@ export default function InsightInboxPage() {
                         </span>
                       </div>
                     )}
+                    {record.sourceType === 'relationship_analysis' && record.relationshipAnalysis && (
+                      <div className="message-analysis-tags relationship-analysis-tags">
+                        <span>情绪：{record.relationshipAnalysis.emotion}</span>
+                        <span>事实：{record.relationshipAnalysis.facts.length} 项</span>
+                        <span>推测：{record.relationshipAnalysis.hypotheses.length} 项</span>
+                        <span>未知：{record.relationshipAnalysis.unknowns.length} 项</span>
+                      </div>
+                    )}
                     <p className="insight-body">{record.insight}</p>
                     {record.sourceType === 'message_analysis' && record.messageInsight && (
                       <div className="message-analysis-tags">
@@ -409,7 +433,8 @@ export default function InsightInboxPage() {
             {[
               { value: 'all', label: '全部' },
               { value: 'insight', label: 'AI 见解' },
-              { value: 'message_analysis', label: '深度解析' }
+              { value: 'message_analysis', label: '深度解析' },
+              { value: 'relationship_analysis', label: '关系分析' }
             ].map((option) => (
               <button
                 key={option.value}
@@ -550,6 +575,21 @@ export default function InsightInboxPage() {
                     `emotion: ${logRecord.log.parsedAnalysis.emotion}`,
                     `intent: ${logRecord.log.parsedAnalysis.intent}`,
                     `topic: ${logRecord.log.parsedAnalysis.topic}`
+                  ].join('\n')}</pre>
+                </section>
+              )}
+              {logRecord.sourceType === 'relationship_analysis' && logRecord.relationshipAnalysis && (
+                <section>
+                  <h4>关系分析字段</h4>
+                  <pre>{[
+                    `emotion: ${logRecord.relationshipAnalysis.emotion}`,
+                    `facts: ${logRecord.relationshipAnalysis.facts.join('；')}`,
+                    `hypotheses: ${logRecord.relationshipAnalysis.hypotheses.join('；')}`,
+                    `unknowns: ${logRecord.relationshipAnalysis.unknowns.join('；')}`,
+                    `recommendation: ${logRecord.relationshipAnalysis.recommendation}`,
+                    `nextAction: ${logRecord.relationshipAnalysis.nextAction}`,
+                    `stopCondition: ${logRecord.relationshipAnalysis.stopCondition || ''}`,
+                    `evidence: ${logRecord.relationshipAnalysis.evidence.map((item) => `[${item.id}] ${item.quote}`).join('；')}`
                   ].join('\n')}</pre>
                 </section>
               )}

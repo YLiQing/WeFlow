@@ -334,8 +334,8 @@ jobs:
 
           ## macOS 安装提示
           - 如果被系统提示已损坏，你需要在终端执行以下命令去除隔离标记：
-          - \`xattr -dr com.apple.quarantine "/Applications/WeFlow.app"\`
-          - 执行后重新打开 WeFlow。
+          - \`xattr -dr com.apple.quarantine "/Applications/TalkGate.app"\`
+          - 执行后重新打开 TalkGate。
 
           > 如果某个平台链接暂时未生成，可进入[完整发布页]($RELEASE_PAGE)查看全部资源
           EOF
@@ -377,11 +377,11 @@ jobs:
         if: steps.aur-credentials.outputs.enabled == 'true'
         uses: KSXGitHub/github-actions-deploy-aur@master
         with:
-          pkgname: weflow
+          pkgname: talkgate
           pkgbuild: resources/installer/linux/PKGBUILD
           updpkgsums: true
           assets: |
-            resources/installer/linux/weflow.desktop
+            resources/installer/linux/talkgate.desktop
             resources/installer/linux/icon.png
             resources/installer/linux/.gitignore
 
@@ -389,3 +389,5 @@ jobs:
           commit_username: H3CoF6
           commit_email: h3cof6@gmail.com
           ssh_keyscan_types: ed25519
+
+

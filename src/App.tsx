@@ -40,6 +40,7 @@ const NotificationWindow = lazy(() => import('./pages/NotificationWindow'))
 const AccountManagementPage = lazy(() => import('./pages/AccountManagementPage'))
 const BackupPage = lazy(() => import('./pages/BackupPage'))
 const InsightInboxPage = lazy(() => import('./pages/InsightInboxPage'))
+const RelationshipProfilePage = lazy(() => import('./pages/RelationshipProfilePage'))
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
 const GroupAnalyticsPage = lazy(() => import('./pages/GroupAnalyticsPage'))
 const AnnualReportPage = lazy(() => import('./pages/AnnualReportPage'))
@@ -657,16 +658,16 @@ function App() {
               <h2>用户协议与隐私政策</h2>
             </div>
             <div className="agreement-content">
-              <p>欢迎使用WeFlow！在使用本软件前，请仔细阅读以下条款：</p>
+              <p>欢迎使用 TalkGate（语扉）！在使用本软件前，请仔细阅读以下条款：</p>
               <div className="agreement-notice">
                 <strong>这是免费软件，如果你是付费购买的话请骂死那个骗子。</strong>
                 <span className="agreement-notice-link">
                   官方网站：
-                  <a href="https://weflow.top" target="_blank" rel="noreferrer">
-                    https://weflow.top
+                  <a href="https://github.com/YLiQing/WeFlow" target="_blank" rel="noreferrer">
+                    https://github.com/YLiQing/WeFlow
                   </a>
                   &nbsp;·&nbsp;
-                  <a href="https://github.com/hicccc77/WeFlow" target="_blank" rel="noreferrer">
+                  <a href="https://github.com/YLiQing/WeFlow" target="_blank" rel="noreferrer">
                     GitHub 仓库
                   </a>
                 </span>
@@ -713,7 +714,7 @@ function App() {
             </div>
             <div className="agreement-content">
               <div className="agreement-text">
-                <p>为了持续改进 WeFlow 并提供更好的用户体验，我们希望收集一些匿名的使用数据。</p>
+                <p>为了持续改进 TalkGate（语扉）并提供更好的用户体验，我们希望收集一些匿名的使用数据。</p>
 
                 <h4>我们会收集什么？</h4>
                 <p>• 功能使用情况（如哪些功能被使用、使用频率）</p>
@@ -794,6 +795,7 @@ function App() {
                 <Route path="/export" element={<div className="export-route-anchor" aria-hidden="true" />} />
                 <Route path="/sns" element={<SnsPage />} />
                 <Route path="/insight-inbox" element={<InsightInboxPage />} />
+                <Route path="/relationship-profile" element={<RelationshipProfilePage />} />
                 <Route path="/biz" element={<BizPage />} />
                 <Route path="/contacts" element={<ContactsPage />} />
                 <Route path="/resources" element={<ResourcesPage />} />
@@ -814,3 +816,4 @@ function App() {
 }
 
 export default App
+

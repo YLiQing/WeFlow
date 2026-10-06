@@ -478,7 +478,7 @@ function DualReportWindow() {
         <div className={getSceneClass(0)} id="scene-0">
           <div className="center-layout s0-layout">
             <div className="reveal-wrap">
-              <div className="reveal-inner en-tag delay-1">WEFLOW · DUAL RECORD</div>
+              <div className="reveal-inner en-tag delay-1">TALKGATE · DUAL RECORD</div>
             </div>
             <div className="reveal-wrap">
               <h1 className="reveal-inner hero-title delay-2">
@@ -684,7 +684,7 @@ function DualReportWindow() {
               <h1 className="reveal-inner extract-title delay-1">ARCHIVED</h1>
             </div>
             <div className="reveal-wrap">
-              <p className="reveal-inner desc delay-2">WeFlow</p>
+              <p className="reveal-inner desc delay-2">TalkGate（语扉）</p>
             </div>
             <div className="reveal-wrap">
               <button 
@@ -715,3 +715,4 @@ function DualReportWindow() {
 }
 
 export default DualReportWindow
+

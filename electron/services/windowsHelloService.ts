@@ -8,7 +8,7 @@ export class WindowsHelloService {
      * 验证 Windows Hello
      * @param message 提示信息
      */
-    async verify(message: string = '请验证您的身份以解锁 WeFlow', targetWindow?: BrowserWindow): Promise<{ success: boolean; error?: string }> {
+    async verify(message: string = '请验证您的身份以解锁 TalkGate（语扉）', targetWindow?: BrowserWindow): Promise<{ success: boolean; error?: string }> {
         // Prevent concurrent verification requests
         if (this.verificationPromise) {
             return this.verificationPromise
@@ -30,3 +30,4 @@ export class WindowsHelloService {
 }
 
 export const windowsHelloService = new WindowsHelloService()
+

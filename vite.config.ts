@@ -44,7 +44,7 @@ const exportWorkerElectronShimPlugin = () => {
           isPackaged: Boolean(process.resourcesPath && process.env.NODE_ENV !== 'development'),
           getPath,
           getAppPath: () => process.cwd(),
-          getName: () => 'WeFlow',
+          getName: () => 'TalkGate',
           getVersion: () => process.env.npm_package_version || '0.0.0',
           // Worker 中不存在 app 生命周期事件（如 will-quit），no-op 兼容注册退出钩子的服务
           on: () => app,

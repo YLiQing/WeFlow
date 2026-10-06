@@ -132,3 +132,4 @@ jobs:
 
               console.log(`Closed spam issue #${issue.number}: ${issue.title}`);
             }
+

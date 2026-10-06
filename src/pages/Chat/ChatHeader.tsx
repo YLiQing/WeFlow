@@ -7,6 +7,8 @@ import {
   Image as ImageIcon,
   Info,
   Loader2,
+  HeartHandshake,
+  MessageSquare,
   Mic,
   Newspaper,
   RefreshCw,
@@ -40,11 +42,15 @@ export interface ChatHeaderProps {
   isBatchDecrypting: boolean
   batchImageDecryptProgress?: { current: number; total: number }
   isTriggeringSessionInsight: boolean
+  isAnalyzingRelationship: boolean
+  isGeneratingReplyAssistant: boolean
   isRefreshingMessages: boolean
   isLoadingMessages: boolean
   currentSessionId?: string | null
   jumpCalendarWrapRef: React.RefObject<HTMLDivElement | null>
   onTriggerSessionInsight: () => void
+  onAnalyzeRelationship: () => void
+  onGenerateReplyAssistant: () => void
   onToggleGroupSummaryPanel: () => void
   onGroupAnalytics: () => void
   onToggleGroupMembersPanel: () => void
@@ -79,11 +85,15 @@ function ChatHeader({
   isBatchDecrypting,
   batchImageDecryptProgress,
   isTriggeringSessionInsight,
+  isAnalyzingRelationship,
+  isGeneratingReplyAssistant,
   isRefreshingMessages,
   isLoadingMessages,
   currentSessionId,
   jumpCalendarWrapRef,
   onTriggerSessionInsight,
+  onAnalyzeRelationship,
+  onGenerateReplyAssistant,
   onToggleGroupSummaryPanel,
   onGroupAnalytics,
   onToggleGroupMembersPanel,
@@ -137,6 +147,28 @@ function ChatHeader({
         >
           {isTriggeringSessionInsight ? <Loader2 size={18} className="spin" /> : <Sparkles size={18} />}
         </button>
+        {!isGroupChat && (
+          <button
+            className={`icon-btn relationship-analysis-btn${isAnalyzingRelationship ? ' triggering' : ''}`}
+            onClick={onAnalyzeRelationship}
+            disabled={!currentSessionId || isAnalyzingRelationship}
+            title={isAnalyzingRelationship ? '正在分析关系' : '关系分析'}
+            aria-label="关系分析"
+          >
+            {isAnalyzingRelationship ? <Loader2 size={18} className="spin" /> : <HeartHandshake size={18} />}
+          </button>
+        )}
+        {!isGroupChat && (
+          <button
+            className={`icon-btn reply-assistant-btn${isGeneratingReplyAssistant ? ' triggering' : ''}`}
+            onClick={onGenerateReplyAssistant}
+            disabled={!currentSessionId || isGeneratingReplyAssistant}
+            title={isGeneratingReplyAssistant ? '正在生成回复草稿' : '回复助手'}
+            aria-label="回复助手"
+          >
+            {isGeneratingReplyAssistant ? <Loader2 size={18} className="spin" /> : <MessageSquare size={18} />}
+          </button>
+        )}
         {isGroupChat && aiGroupSummaryEnabled && (
           <button
             className={`icon-btn group-summary-btn ${showGroupSummaryPanel ? 'active' : ''}`}
@@ -283,11 +315,15 @@ function areEqual(prev: ChatHeaderProps, next: ChatHeaderProps) {
     prev.batchImageDecryptProgress?.current === next.batchImageDecryptProgress?.current &&
     prev.batchImageDecryptProgress?.total === next.batchImageDecryptProgress?.total &&
     prev.isTriggeringSessionInsight === next.isTriggeringSessionInsight &&
+    prev.isAnalyzingRelationship === next.isAnalyzingRelationship &&
+    prev.isGeneratingReplyAssistant === next.isGeneratingReplyAssistant &&
     prev.isRefreshingMessages === next.isRefreshingMessages &&
     prev.isLoadingMessages === next.isLoadingMessages &&
     prev.currentSessionId === next.currentSessionId &&
     prev.jumpCalendarWrapRef === next.jumpCalendarWrapRef &&
     prev.onTriggerSessionInsight === next.onTriggerSessionInsight &&
+    prev.onAnalyzeRelationship === next.onAnalyzeRelationship &&
+    prev.onGenerateReplyAssistant === next.onGenerateReplyAssistant &&
     prev.onToggleGroupSummaryPanel === next.onToggleGroupSummaryPanel &&
     prev.onGroupAnalytics === next.onGroupAnalytics &&
     prev.onToggleGroupMembersPanel === next.onToggleGroupMembersPanel &&

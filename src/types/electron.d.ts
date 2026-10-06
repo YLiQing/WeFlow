@@ -21,8 +21,8 @@ export interface SocialSaveWeiboCookieResult {
   error?: string
 }
 
-export type InsightRecordTriggerReason = 'activity' | 'silence' | 'test' | 'manual' | 'message_analysis'
-export type InsightRecordSourceType = 'insight' | 'message_analysis'
+export type InsightRecordTriggerReason = 'activity' | 'silence' | 'test' | 'manual' | 'message_analysis' | 'relationship_analysis'
+export type InsightRecordSourceType = 'insight' | 'message_analysis' | 'relationship_analysis'
 
 export interface MessageInsightAnalysis {
   explicitText: string
@@ -39,6 +39,83 @@ export interface MessageInsightTarget {
   targetTextPreview: string
   analysis: MessageInsightAnalysis
 }
+
+export interface RelationshipEvidence {
+  id: string
+  messageKey?: string
+  localId: number
+  createTime: number
+  sender: string
+  quote: string
+  reason?: string
+}
+
+export interface RelationshipAnalysis {
+  accountScope?: string
+  sessionId?: string
+  emotion: string
+  facts: string[]
+  hypotheses: string[]
+  unknowns: string[]
+  recommendation: string
+  nextAction: string
+  stopCondition?: string
+  evidence: RelationshipEvidence[]
+}
+
+export interface RelationshipProposedField { value: string; confidence: RelationshipConfidence; evidenceIds: string[]; quotes: string[]; replacesValue?: string }
+export interface RelationshipProposedEvent extends RelationshipProposedField { occurredAt: string; summary: string }
+export interface RelationshipDraftChange { key: string; value: string; previousValue?: string; kind: 'add' | 'replace' }
+export interface RelationshipDraftChanges { added: RelationshipDraftChange[]; replacements: RelationshipDraftChange[] }
+export interface RelationshipProfileStatistics {
+  totalMessages: number; myMessages: number; objectMessages: number; myInitiations: number; objectInitiations: number;
+  replyCount: number; replyRate?: number; averageReplyInterval?: number; medianReplyInterval?: number;
+  myReplyCount: number; objectReplyCount: number; myReplyRate?: number; objectReplyRate?: number; unknownMessages: number;
+  longestConversationMessages: number; longestConversationDuration: number;
+  conversationSegments: number; longestSilence?: number; firstMessageAt?: number; lastMessageAt?: number;
+  dailyActivity: Array<{ date: string; mine: number; theirs: number; total: number }>
+  weeklyActivity: Array<{ week: string; mine: number; theirs: number; total: number }>
+  messageTypes: Record<string, number>; topKeywords: Array<{ keyword: string; count: number }>
+}
+export interface RelationshipAnalysisReport { facts: RelationshipProposedField[]; hypotheses: RelationshipProposedField[]; unknowns: RelationshipProposedField[]; recommendation?: RelationshipProposedField; nextAction?: RelationshipProposedField; stopCondition?: RelationshipProposedField }
+export interface RelationshipProfileDraft {
+  sessionId: string; accountScope: string; taskId: string; generatedAt: number
+  coverage: { totalMessages: number; analyzedMessages: number; firstMessageAt?: number; lastMessageAt?: number; lastMessageId?: string; boundaryMessageIds?: string[]; newMessages?: number; readMessages?: number; readMode?: 'full' | 'incremental'; profileRevision?: string; sourceFingerprint?: string; truncated: boolean }
+  statistics: RelationshipProfileStatistics
+  report: RelationshipAnalysisReport
+  evidence: RelationshipEvidence[]
+  user: { communicationPreferences: RelationshipProposedField[]; strengths: RelationshipProposedField[]; limitations: RelationshipProposedField[]; boundaries: RelationshipProposedField[] }
+  object: { displayLabel?: RelationshipProposedField; confirmedFacts: RelationshipProposedField[]; hypotheses: RelationshipProposedField[]; keyEvents: RelationshipProposedEvent[] }
+  relationship: Partial<Record<'role' | 'stage' | 'goal' | 'replyAttitude' | 'currentAction' | 'observationWindow' | 'stopCondition', RelationshipProposedField | undefined>>
+  changes?: RelationshipDraftChanges
+}
+
+export interface ReplyAssistantResult {
+  suggestionId: string
+  sessionId: string
+  accountScope: string
+  mode: string
+  draft: string
+  reason: string
+  risk: string
+  positiveFollowUp: string
+  ambiguousFollowUp: string
+  noResponsePlan: string
+  status: 'draft' | 'clarification'
+  clarificationQuestion?: string
+  suggestedMode?: string
+  suggestedModeReason?: string
+  originalDraft?: string
+  previousDraft?: string
+  intent?: string
+  revisionFeedback?: string
+  clarification?: { question: string; answer: string }
+  proposedPreference?: string
+  historyEvidence?: Array<{ id: string; messageKey?: string; localId: number; createTime: number; sender: string; quote: string; reason?: string }>
+  historicalMemory?: RelationshipHistoricalMemory[]
+}
+
+export interface ReplyAssistantRequest { accountScope?: string; taskId?: string; sessionId: string; displayName?: string; mode?: string; contextCount?: number; intent?: string; clarification?: { question: string; answer: string }; revision?: { previousDraft: string; feedback: string } }
 
 export interface InsightRecordLog {
   endpoint: string
@@ -71,6 +148,7 @@ export interface InsightRecordLog {
     readError?: string
   }
   parsedAnalysis?: MessageInsightAnalysis
+  parsedRelationshipAnalysis?: RelationshipAnalysis
 }
 
 export interface InsightRecordSummary {
@@ -84,6 +162,7 @@ export interface InsightRecordSummary {
   insight: string
   read: boolean
   messageInsight?: MessageInsightTarget
+  relationshipAnalysis?: RelationshipAnalysis
 }
 
 export interface InsightRecord extends InsightRecordSummary {
@@ -123,6 +202,28 @@ export interface InsightRecordResult {
   record?: InsightRecord
   error?: string
 }
+
+export type RelationshipConfidence = 'low' | 'medium' | 'high'
+export type RelationshipMemorySource = 'user' | 'model' | 'chat'
+export type RelationshipHypothesisStatus = 'active' | 'confirmed' | 'refuted' | 'expired'
+export interface RelationshipHypothesis { value: string; confidence: RelationshipConfidence; source: RelationshipMemorySource; evidenceIds?: string[]; updatedAt?: number; status?: RelationshipHypothesisStatus; expiresAt?: number; reviewedAt?: number }
+export type RelationshipDraftDecision = 'pending' | 'accept' | 'reject' | 'accepted' | 'rejected'
+export interface RelationshipAnalysisHistoryEntry { draft: RelationshipProfileDraft; status: 'pending' | 'accepted' | 'discarded' | 'superseded'; reviewedAt?: number; approvals?: unknown; decisions?: Record<string, RelationshipDraftDecision> }
+export interface RelationshipEvent { id: string; summary: string; occurredAt: string; source: RelationshipMemorySource; evidenceIds?: string[] }
+export interface UserRelationshipProfile { displayLabel?: string; mbti?: string; subjectiveScore?: number; strengths?: string[]; limitations?: string[]; communicationPreferences?: string[]; communicationPreferenceModes?: Record<string, string>; boundaries?: string[]; updatedAt?: number }
+export interface RelationshipReplyOutcome { id: string; suggestionId?: string; mode?: string; draft: string; outcome: string; createdAt: number; originalDraft?: string; intent?: string; revisionFeedback?: string; history?: Array<{ outcome: string; createdAt: number; draft?: string }> }
+export type RelationshipAutomaticDraftState = 'idle' | 'checking' | 'analyzing' | 'waiting_review' | 'failed'
+export interface RelationshipAutomaticDraftStatus { state: RelationshipAutomaticDraftState; lastCheckedAt?: number; lastGeneratedAt?: number; lastAttemptAt?: number; detectedNewMessages?: number; queuedNewMessages?: number; queuedCheckedAt?: number; pendingReviewTaskId?: string; lastError?: string; updatedAt: number }
+export interface RelationshipAnalysisCheckpoint { lastMessageId?: string; boundaryMessageIds?: string[]; lastMessageAt?: number; totalMessages: number; analyzedAt: number }
+export interface RelationshipFieldSource { field: string; value: string; confidence: RelationshipConfidence; evidenceIds: string[]; quotes: string[]; reviewedAt: number; taskId: string; replyMode?: string; expressionExample?: { previous: string; approved: string; feedback: string } }
+export interface ObjectRelationshipProfile { sessionId: string; selfProfile?: UserRelationshipProfile; displayLabel?: string; mbti?: string; subjectiveScore?: number; confirmedFacts: string[]; hypotheses: RelationshipHypothesis[]; keyEvents: RelationshipEvent[]; replyOutcomes?: RelationshipReplyOutcome[]; automaticDraftStatus?: RelationshipAutomaticDraftStatus; analysisCheckpoint?: RelationshipAnalysisCheckpoint; fieldSources?: RelationshipFieldSource[]; automaticDraftUpdates?: boolean; updatedAt: number }
+export interface RelationshipStrategy { role?: string; stage?: string; goal?: string; replyAttitude?: string; currentAction?: string; observationWindow?: string; stopCondition?: string; expiresAt?: number; updatedAt?: number }
+export interface RelationshipProfileState { version: 1; memoryEnabled: boolean; memoryPaused: boolean; user: UserRelationshipProfile; objects: Record<string, ObjectRelationshipProfile>; relationships: Record<string, RelationshipStrategy>; updatedAt: number }
+export interface RelationshipProfileResult { success: boolean; state: RelationshipProfileState; accountScope?: string; message?: string }
+export interface RelationshipMemoryVersion { id: string; createdAt: number; reason: string; object: ObjectRelationshipProfile; relationship?: RelationshipStrategy }
+export interface RelationshipMemoryArchive { id: string; field: 'confirmedFacts' | 'keyEvents' | 'communicationPreferences' | 'strengths' | 'limitations' | 'boundaries'; value: string; event?: RelationshipEvent; source?: RelationshipFieldSource; archivedAt: number; reason?: 'capacity' | 'removed' }
+export interface RelationshipHistoricalMemory { id: string; field: RelationshipMemoryArchive['field']; value: string; archivedAt: number; occurredAt?: string; quotes: string[]; expressionExample?: RelationshipFieldSource['expressionExample']; replyMode?: string }
+export interface RelationshipMemoryHistory { success: boolean; revision: string; versions: RelationshipMemoryVersion[]; archives: RelationshipMemoryArchive[] }
 
 export type InsightProfileStatusValue = 'none' | 'ready' | 'running' | 'failed'
 
@@ -1688,6 +1789,52 @@ export interface ElectronAPI {
       contextCount?: number
       forceRefresh?: boolean
     }) => Promise<{ success: boolean; message: string; cached?: boolean; recordId?: string; data?: MessageInsightAnalysis }>
+    analyzeRelationship: (payload: {
+      sessionId: string
+      displayName?: string
+      avatarUrl?: string
+      contextCount?: number
+    }) => Promise<{ success: boolean; message: string; recordId?: string; insight?: string; data?: RelationshipAnalysis }>
+    generateRelationshipProfileDraft: (payload: { accountScope: string; sessionId: string; displayName?: string; contextCount?: number; taskId?: string; forceFull?: boolean }) => Promise<{ success: boolean; message: string; data?: RelationshipProfileDraft }>
+    onRelationshipProfileProgress?: (callback: (payload: { sessionId: string; taskId: string; phase: string; progress: number; message: string; loadedMessages?: number }) => void) => (() => void)
+    cancelRelationshipProfileDraft: (taskId: string) => Promise<{ success: boolean; message: string }>
+    generateReplyAssistant: (payload: {
+      accountScope?: string
+      taskId?: string
+      sessionId: string
+      displayName?: string
+      mode?: string
+      contextCount?: number
+      intent?: string
+      clarification?: { question: string; answer: string }
+      revision?: { previousDraft: string; feedback: string }
+    }) => Promise<{ success: boolean; message: string; data?: ReplyAssistantResult }>
+    cancelReplyAssistant: (taskId: string) => Promise<{ success: boolean; message: string }>
+    validateReplyAssistant: (payload: { accountScope: string; sessionId: string; suggestionId: string }) => Promise<{ success: boolean; stale?: boolean; message: string }>
+  }
+  relationshipProfile: {
+    getMemoryHistory: (sessionId: string, accountScope: string) => Promise<RelationshipMemoryHistory>
+    restoreMemory: (payload: { accountScope: string; sessionId: string; revision: string; kind: 'version' | 'archive'; id: string }) => Promise<RelationshipProfileResult>
+    getAnalysisHistory: (sessionId: string) => Promise<{ success: boolean; entries: RelationshipAnalysisHistoryEntry[] }>
+    reviewHypothesis: (payload: { accountScope: string; sessionId: string; value: string; status: RelationshipHypothesisStatus; expiresAt?: number }) => Promise<RelationshipProfileResult>
+    refreshDraftUpdates: () => Promise<{ success: boolean }>
+    getPendingReview: (sessionId: string) => Promise<{ success: boolean; review?: { draft: RelationshipProfileDraft; selection: Record<string, boolean>; decisions?: Record<string, RelationshipDraftDecision> } }>
+    savePendingReview: (payload: { draft: RelationshipProfileDraft; selection: Record<string, boolean>; decisions?: Record<string, RelationshipDraftDecision> }) => Promise<{ success: boolean }>
+    discardPendingReview: (sessionId: string, accountScope: string) => Promise<{ success: boolean }>
+    getState: () => Promise<RelationshipProfileResult>
+    enableMemory: (accountScope: string) => Promise<RelationshipProfileResult>
+    setPaused: (paused: boolean, accountScope: string) => Promise<RelationshipProfileResult>
+    update: (payload: { accountScope: string; sessionId?: string; user?: Record<string, unknown>; object?: Record<string, unknown>; relationship?: Record<string, unknown> }) => Promise<RelationshipProfileResult>
+    addEvent: (payload: { accountScope: string; sessionId: string; id: string; summary: string; occurredAt: string; source?: RelationshipMemorySource; evidenceIds?: string[] }) => Promise<RelationshipProfileResult>
+    confirmFact: (sessionId: string, fact: string, accountScope: string) => Promise<RelationshipProfileResult>
+    removeFact: (sessionId: string, fact: string, accountScope: string) => Promise<RelationshipProfileResult>
+    confirmHypothesis: (payload: { accountScope: string; sessionId: string; value: string; confidence?: RelationshipConfidence; evidenceIds?: string[] }) => Promise<RelationshipProfileResult>
+    recordReplyOutcome: (payload: { sessionId: string; accountScope: string; id?: string; suggestionId?: string; mode?: string; draft: string; outcome: string; originalDraft?: string; intent?: string; revisionFeedback?: string }) => Promise<RelationshipProfileResult>
+    confirmReplyPreference: (payload: { accountScope: string; sessionId: string; value: string; suggestionId: string; feedback: string; replyMode?: string; expressionExample?: { previous: string; approved: string } }) => Promise<RelationshipProfileResult>
+    removeHypothesis: (sessionId: string, value: string, accountScope: string) => Promise<RelationshipProfileResult>
+    forgetObject: (sessionId: string, accountScope: string) => Promise<RelationshipProfileResult>
+    revoke: (deleteData: boolean, accountScope: string) => Promise<RelationshipProfileResult>
+    applyDraft: (payload: { sessionId: string; draft: RelationshipProfileDraft; approvals: unknown; decisions?: Record<string, RelationshipDraftDecision> }) => Promise<RelationshipProfileResult>
   }
   groupSummary: {
     listRecords: (filters?: GroupSummaryRecordFilters) => Promise<GroupSummaryRecordListResult>

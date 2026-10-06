@@ -8,7 +8,8 @@ import { useChatStore } from '../stores/chatStore'
 import { useBatchTranscribeStore, type BatchVoiceTaskType } from '../stores/batchTranscribeStore'
 import { useBatchImageDecryptStore } from '../stores/batchImageDecryptStore'
 import type { ChatRecordItem, ChatSession, Message } from '../types/models'
-import type { GroupSummaryRecord, GroupSummaryRecordSummary } from '../types/electron'
+import type { GroupSummaryRecord, GroupSummaryRecordSummary, RelationshipAnalysis, ReplyAssistantResult, ReplyAssistantRequest } from '../types/electron'
+import ReplyAssistantPanel from '../components/ReplyAssistantPanel'
 import { renderTextWithEmoji } from '../utils/renderTextWithEmoji'
 import { displayNameOrFallback, pickDisplayName } from '../utils/displayName'
 import { VoiceTranscribeDialog } from '../components/VoiceTranscribeDialog'
@@ -751,7 +752,7 @@ function isWeakQuotedComparableText(value: unknown): boolean {
 
 const CHAT_SESSION_LIST_CACHE_TTL_MS = 24 * 60 * 60 * 1000
 const CHAT_SESSION_PREVIEW_CACHE_TTL_MS = 24 * 60 * 60 * 1000
-const CHAT_SESSION_MESSAGE_CACHE_VERSION = 3
+const CHAT_SESSION_MESSAGE_CACHE_VERSION = 4
 const CHAT_SESSION_PREVIEW_LIMIT_PER_SESSION = 30
 const CHAT_SESSION_PREVIEW_MAX_SESSIONS = 18
 const CHAT_SESSION_WINDOW_CACHE_TTL_MS = 12 * 60 * 60 * 1000
@@ -1840,6 +1841,21 @@ function ChatPage(props: ChatPageProps) {
   const [aiMessageInsightEnabled, setAiMessageInsightEnabled] = useState(false)
   const [aiMessageInsightContextCount, setAiMessageInsightContextCount] = useState(50)
   const [isTriggeringSessionInsight, setIsTriggeringSessionInsight] = useState(false)
+  const [isAnalyzingRelationship, setIsAnalyzingRelationship] = useState(false)
+  const [relationshipAnalysis, setRelationshipAnalysis] = useState<RelationshipAnalysis | null>(null)
+  const [isGeneratingReplyAssistant, setIsGeneratingReplyAssistant] = useState(false)
+  const [replyAssistant, setReplyAssistant] = useState<ReplyAssistantResult | null>(null)
+  const replyTaskSequence = useRef(0)
+  const replyTaskId = useRef<string | null>(null)
+  const replyRequestStarted = useRef(false)
+  const cancelActiveReply = useCallback(() => {
+    const taskId = replyTaskId.current
+    replyTaskId.current = null
+    if (taskId && replyRequestStarted.current) void window.electronAPI.insight.cancelReplyAssistant(taskId).catch(() => {})
+    replyRequestStarted.current = false
+  }, [])
+  useEffect(() => () => { replyTaskSequence.current++; cancelActiveReply() }, [cancelActiveReply])
+  const relationshipTaskSequence = useRef(0)
   const [sessionInsightHint, setSessionInsightHint] = useState<{ success: boolean; message: string } | null>(null)
   const sessionInsightHintTimerRef = useRef<number | null>(null)
   const messageKeySetRef = useRef<Set<string>>(new Set())
@@ -3522,9 +3538,16 @@ function ChatPage(props: ChatPageProps) {
   // 同步 currentSessionId 到 ref
   useEffect(() => {
     currentSessionRef.current = currentSessionId
+    replyTaskSequence.current++
+    cancelActiveReply()
+    relationshipTaskSequence.current++
     messageInsightMemoryCache.clear()
     setSessionInsightHint(null)
     setIsTriggeringSessionInsight(false)
+    setIsAnalyzingRelationship(false)
+    setIsGeneratingReplyAssistant(false)
+    setRelationshipAnalysis(null)
+    setReplyAssistant(null)
     if (sessionInsightHintTimerRef.current !== null) {
       window.clearTimeout(sessionInsightHintTimerRef.current)
       sessionInsightHintTimerRef.current = null
@@ -6747,6 +6770,175 @@ function ChatPage(props: ChatPageProps) {
     }
   }, [currentSession, currentSessionId, isTriggeringSessionInsight, showSessionInsightHint])
 
+  const handleAnalyzeRelationship = useCallback(async () => {
+    const session = currentSession
+    const sessionId = String(session?.username || currentSessionId || '').trim()
+    if (!sessionId || isCurrentSessionGroup || isAnalyzingRelationship) return
+    const sequence = ++relationshipTaskSequence.current
+    setIsAnalyzingRelationship(true)
+    setRelationshipAnalysis(null)
+    setSessionInsightHint({ success: true, message: '正在分析最近聊天中的关系信号...' })
+    try {
+      const result = await window.electronAPI.insight.analyzeRelationship({
+        sessionId,
+        displayName: displayNameOrFallback(sessionId, session?.displayName),
+        avatarUrl: session?.avatarUrl,
+        contextCount: 60
+      })
+      if (currentSessionRef.current !== sessionId || sequence !== relationshipTaskSequence.current) return
+      if (result.success && result.data) {
+        const current = await window.electronAPI.relationshipProfile.getState()
+        if (currentSessionRef.current !== sessionId || sequence !== relationshipTaskSequence.current) return
+        if (result.data.accountScope !== current.accountScope || result.data.sessionId !== sessionId) throw new Error('账号或联系人已变化，请重新分析')
+        setRelationshipAnalysis(result.data)
+      }
+      showSessionInsightHint({ success: result.success, message: result.message || (result.success ? '关系分析已生成' : '关系分析失败') })
+    } catch (error) {
+      if (currentSessionRef.current === sessionId && sequence === relationshipTaskSequence.current) showSessionInsightHint({ success: false, message: `关系分析失败：${(error as Error).message || String(error)}` })
+    } finally {
+      if (currentSessionRef.current === sessionId && sequence === relationshipTaskSequence.current) setIsAnalyzingRelationship(false)
+    }
+  }, [currentSession, currentSessionId, isAnalyzingRelationship, isCurrentSessionGroup, showSessionInsightHint])
+
+  const handleGenerateReplyAssistant = useCallback(async (options: Partial<ReplyAssistantRequest> = {}) => {
+    const session = currentSession
+    const sessionId = String(session?.username || currentSessionId || '').trim()
+    if (!sessionId || isCurrentSessionGroup || isGeneratingReplyAssistant || replyTaskId.current) return
+    const sequence = ++replyTaskSequence.current
+    const taskId = window.crypto.randomUUID()
+    replyTaskId.current = taskId
+    setIsGeneratingReplyAssistant(true)
+    setSessionInsightHint({ success: true, message: '正在生成回复草稿...' })
+    try {
+      const initial = await window.electronAPI.relationshipProfile.getState()
+      if (currentSessionRef.current !== sessionId || sequence !== replyTaskSequence.current) return
+      if (replyAssistant && replyAssistant.accountScope !== initial.accountScope) {
+        setReplyAssistant(null)
+        throw new Error('账号已切换，请重新生成')
+      }
+      replyRequestStarted.current = true
+      const result = await window.electronAPI.insight.generateReplyAssistant({
+        taskId,
+        sessionId,
+        displayName: displayNameOrFallback(sessionId, session?.displayName),
+        accountScope: initial.accountScope,
+        mode: options.mode || replyAssistant?.mode || 'natural',
+        contextCount: 40,
+        intent: options.intent,
+        clarification: options.clarification,
+        revision: options.revision
+      })
+      if (currentSessionRef.current !== sessionId || sequence !== replyTaskSequence.current) return
+      if (result.success && result.data) {
+        const current = await window.electronAPI.relationshipProfile.getState()
+        if (currentSessionRef.current !== sessionId || sequence !== replyTaskSequence.current) return
+        if (current.accountScope !== result.data.accountScope || result.data.sessionId !== sessionId) throw new Error('账号或联系人已变化，请重新生成')
+        setReplyAssistant(result.data)
+      }
+      showSessionInsightHint({ success: result.success, message: result.message || (result.success ? '回复草稿已生成' : '回复草稿生成失败') })
+    } catch (error) {
+      if (currentSessionRef.current === sessionId && sequence === replyTaskSequence.current) showSessionInsightHint({ success: false, message: `回复草稿生成失败：${(error as Error).message || String(error)}` })
+    } finally {
+      if (replyTaskId.current === taskId) { replyTaskId.current = null; replyRequestStarted.current = false }
+      if (currentSessionRef.current === sessionId && sequence === replyTaskSequence.current) setIsGeneratingReplyAssistant(false)
+    }
+  }, [currentSession, currentSessionId, isCurrentSessionGroup, isGeneratingReplyAssistant, replyAssistant, showSessionInsightHint])
+
+  const stopReplyGeneration = useCallback(async () => {
+    const taskId = replyTaskId.current
+    if (!taskId) return
+    if (!replyRequestStarted.current) {
+      replyTaskSequence.current++
+      replyTaskId.current = null
+      setIsGeneratingReplyAssistant(false)
+      showSessionInsightHint({ success: true, message: '回复生成已停止，未发送模型请求' })
+      return
+    }
+    const result = await window.electronAPI.insight.cancelReplyAssistant(taskId)
+    if (replyTaskId.current === taskId) showSessionInsightHint(result)
+  }, [showSessionInsightHint])
+
+  const copyReplyDraft = useCallback(async () => {
+    if (!replyAssistant?.draft) return
+    const sessionId = replyAssistant.sessionId
+    const sequence = replyTaskSequence.current
+    if (currentSessionRef.current !== sessionId) throw new Error('联系人已变化，请重新生成')
+    if (!window.electronAPI.insight.validateReplyAssistant) throw new Error('当前桌面进程版本不支持回复校验，请重启 TalkGate（语扉）。')
+    let validation
+    try {
+      validation = await window.electronAPI.insight.validateReplyAssistant({ accountScope: replyAssistant.accountScope, sessionId, suggestionId: replyAssistant.suggestionId })
+    } catch (error) {
+      if (/No handler registered/.test(String(error))) throw new Error('当前桌面进程版本不支持回复校验，请重启 TalkGate（语扉）。')
+      throw error
+    }
+    if (currentSessionRef.current !== sessionId || sequence !== replyTaskSequence.current) return
+    if (!validation.success) throw new Error(validation.message)
+    try {
+      await navigator.clipboard.writeText(replyAssistant.draft)
+    } catch {
+      const textarea = document.createElement('textarea')
+      textarea.value = replyAssistant.draft
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+    }
+    showSessionInsightHint({ success: true, message: '回复草稿已复制' })
+  }, [replyAssistant, showSessionInsightHint])
+
+  const recordReplyOutcome = useCallback(async (outcome: string) => {
+    const sessionId = String(currentSessionRef.current || currentSessionId || '').trim()
+    if (!sessionId || !replyAssistant || replyAssistant.sessionId !== sessionId) return
+    try {
+    const result = await window.electronAPI.relationshipProfile.recordReplyOutcome({
+      sessionId,
+      accountScope: replyAssistant.accountScope,
+      id: `reply-outcome-${Date.now()}`,
+      suggestionId: replyAssistant?.suggestionId,
+      mode: replyAssistant.mode,
+      draft: replyAssistant?.draft || '',
+      outcome,
+      originalDraft: replyAssistant.originalDraft,
+      intent: replyAssistant.intent,
+      revisionFeedback: replyAssistant.revisionFeedback
+    })
+    showSessionInsightHint({ success: result.success, message: result.message || (result.success ? '反馈已记录' : '反馈未记录') })
+    } catch (error) {
+      if (currentSessionRef.current === sessionId) showSessionInsightHint({ success: false, message: `反馈保存失败：${(error as Error).message || String(error)}` })
+    }
+  }, [currentSessionId, replyAssistant, showSessionInsightHint])
+
+  const confirmRelationshipMemory = useCallback(async (kind: 'fact' | 'hypothesis', value: string, evidenceIds?: string[]) => {
+    const sessionId = String(currentSessionRef.current || currentSessionId || '').trim()
+    if (!sessionId || !value.trim() || relationshipAnalysis?.sessionId !== sessionId || !relationshipAnalysis.accountScope) return
+    try {
+      const accountScope = relationshipAnalysis.accountScope
+      const result = kind === 'fact'
+        ? await window.electronAPI.relationshipProfile.confirmFact(sessionId, value, accountScope)
+        : await window.electronAPI.relationshipProfile.confirmHypothesis({ accountScope, sessionId, value, confidence: 'low', evidenceIds })
+      if (currentSessionRef.current === sessionId) showSessionInsightHint({ success: result.success, message: result.message || (result.success ? '已保存到关系档案' : '保存失败') })
+    } catch (error) {
+      if (currentSessionRef.current === sessionId) showSessionInsightHint({ success: false, message: `保存失败：${(error as Error).message || String(error)}` })
+    }
+  }, [currentSessionId, relationshipAnalysis, showSessionInsightHint])
+
+  const handleRelationshipEvidenceJump = useCallback((evidence: RelationshipAnalysis['evidence'][number]) => {
+    const sessionId = String(currentSessionRef.current || currentSessionId || '').trim()
+    if (!sessionId || !evidence.localId || !evidence.createTime) return
+    handleInSessionResultJump({
+      messageKey: evidence.messageKey || evidence.id,
+      localId: evidence.localId,
+      serverId: 0,
+      localType: 0,
+      createTime: evidence.createTime,
+      sortSeq: evidence.createTime,
+      isSend: evidence.sender === '我' ? 1 : 0,
+      senderUsername: null,
+      parsedContent: evidence.quote,
+      rawContent: evidence.quote
+    } as Message)
+  }, [currentSessionId, handleInSessionResultJump])
+
   const handleGroupAnalytics = useCallback(() => {
     if (!currentSessionId || !isGroupChatSession(currentSessionId)) return
     navigate('/analytics/group', {
@@ -8126,11 +8318,15 @@ function ChatPage(props: ChatPageProps) {
                 isBatchDecrypting={isBatchDecrypting}
                 batchImageDecryptProgress={batchImageDecryptProgress}
                 isTriggeringSessionInsight={isTriggeringSessionInsight}
+                isAnalyzingRelationship={isAnalyzingRelationship}
+                isGeneratingReplyAssistant={isGeneratingReplyAssistant}
                 isRefreshingMessages={isRefreshingMessages}
                 isLoadingMessages={isLoadingMessages}
                 currentSessionId={currentSessionId}
                 jumpCalendarWrapRef={jumpCalendarWrapRef}
                 onTriggerSessionInsight={handleTriggerSessionInsight}
+                onAnalyzeRelationship={handleAnalyzeRelationship}
+                onGenerateReplyAssistant={handleGenerateReplyAssistant}
                 onToggleGroupSummaryPanel={toggleGroupSummaryPanel}
                 onGroupAnalytics={handleGroupAnalytics}
                 onToggleGroupMembersPanel={toggleGroupMembersPanel}
@@ -8181,6 +8377,49 @@ function ChatPage(props: ChatPageProps) {
                 {isTriggeringSessionInsight ? <Loader2 size={14} className="spin" /> : <Sparkles size={14} />}
                 <span>{sessionInsightHint.message}</span>
               </div>
+            )}
+
+            {relationshipAnalysis && (
+              <div className="session-insight-hint success relationship-analysis-result" role="region" aria-label="关系分析结果">
+                <div><strong>情绪承接：</strong>{relationshipAnalysis.emotion}</div>
+                <div><strong>可观察事实：</strong>{relationshipAnalysis.facts.map((fact) => <span className="relationship-memory-candidate" key={fact}>{fact}<button type="button" onClick={() => void confirmRelationshipMemory('fact', fact)}>存入档案</button></span>)}</div>
+                {relationshipAnalysis.hypotheses.length > 0 && <div><strong>合理推测：</strong>{relationshipAnalysis.hypotheses.map((hypothesis) => <span className="relationship-memory-candidate" key={hypothesis}>{hypothesis}<button type="button" onClick={() => void confirmRelationshipMemory('hypothesis', hypothesis)}>保存为暂定</button></span>)}</div>}
+                {relationshipAnalysis.unknowns.length > 0 && <div><strong>关键未知：</strong>{relationshipAnalysis.unknowns.join('；')}</div>}
+                <div><strong>建议：</strong>{relationshipAnalysis.recommendation}</div>
+                <div><strong>下一步：</strong>{relationshipAnalysis.nextAction}</div>
+                {relationshipAnalysis.stopCondition && <div><strong>停止条件：</strong>{relationshipAnalysis.stopCondition}</div>}
+                {relationshipAnalysis.evidence.length > 0 && (
+                  <div className="relationship-evidence-list">
+                    <strong>证据：</strong>
+                    {relationshipAnalysis.evidence.map((item) => (
+                      <button
+                        type="button"
+                        key={item.id}
+                        className="relationship-evidence-item"
+                        onClick={() => handleRelationshipEvidenceJump(item)}
+                        title="跳转到对应消息"
+                      >
+                        [{item.id}] {item.quote}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!isCurrentSessionGroup && isGeneratingReplyAssistant && !replyAssistant && <div className="session-insight-hint" role="status"><Loader2 size={14} className="spin" /><span>正在生成回复草稿…</span><button type="button" onClick={() => void stopReplyGeneration().catch((error) => showSessionInsightHint({ success: false, message: String(error) }))}>停止生成</button></div>}
+            {!isCurrentSessionGroup && replyAssistant && (
+              <ReplyAssistantPanel
+                key={`${replyAssistant.accountScope}:${replyAssistant.sessionId}`}
+                result={replyAssistant}
+                busy={isGeneratingReplyAssistant}
+                onChange={(draft) => setReplyAssistant((current) => current ? { ...current, draft } : current)}
+                onGenerate={handleGenerateReplyAssistant}
+                onCopy={copyReplyDraft}
+                onOutcome={recordReplyOutcome}
+                onStop={stopReplyGeneration}
+                onClose={() => { replyTaskSequence.current++; cancelActiveReply(); setReplyAssistant(null); setIsGeneratingReplyAssistant(false) }}
+              />
             )}
 
             {groupSummaryHint && (
@@ -12654,3 +12893,4 @@ const MemoMessageBubble = React.memo(MessageBubble, (prevProps, nextProps) => {
 })
 
 export default ChatPage
+
